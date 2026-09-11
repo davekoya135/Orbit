@@ -28,6 +28,9 @@ import {
   usePalette,
   type Palette,
 } from "../../theme/palette";
+
+import * as AuthSession from "expo-auth-session";
+
 type Gender = "Female" | "Male";
 
 type DecoratedFieldProps = {
@@ -263,10 +266,8 @@ export default function SignUp() {
   }, [isSignedIn, router]);
 
   const handleSocialSignUp = async (
-    strategy: "oauth_google" | "oauth_apple",
+    strategy: "oauth_google" | "oauth_apple"
   ) => {
-    setMessage("");
-    setSocialLoading(strategy === "oauth_google" ? "google" : "apple");
     try {
       const {
         createdSessionId,
@@ -274,11 +275,19 @@ export default function SignUp() {
         authSessionResult,
         signIn: completedSignIn,
         signUp: completedSignUp,
-      } = await startSSOFlow({ strategy });
+      } = await startSSOFlow({
+        strategy,
+        redirectUrl: AuthSession.makeRedirectUri({
+          scheme: "orbit",
+          path: "sso-callback",
+        }),
+      });
+
       const sessionId =
         createdSessionId ??
         completedSignUp?.createdSessionId ??
         completedSignIn?.createdSessionId;
+
       if (sessionId && setActive) {
         await setActive({ session: sessionId });
         router.replace("/(tabs)/home");
@@ -286,22 +295,13 @@ export default function SignUp() {
         setMessage("Social sign-up was canceled.");
       } else {
         setMessage(
-          `Clerk returned from ${authSessionResult?.type ?? "the provider"}, but no active session was created. Add the generated sso-callback URL to Clerk's redirect URLs.`,
+          `Clerk returned from ${authSessionResult?.type ?? "the provider"
+          }, but no active session was created.`,
         );
       }
-    } catch (error) {
-      const clerkError = error as {
-        errors?: Array<{ longMessage?: string; message?: string }>;
-      };
-      setMessage(
-        clerkError.errors?.[0]?.longMessage ??
-          clerkError.errors?.[0]?.message ??
-          (error instanceof Error
-            ? error.message
-            : "Social sign-up could not be completed."),
-      );
-    } finally {
-      setSocialLoading(null);
+    } catch (err) {
+      console.error(err);
+      setMessage("Something went wrong while signing up with Google.");
     }
   };
   const [fontsLoaded] = useFonts({
